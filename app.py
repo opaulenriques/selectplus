@@ -1,64 +1,38 @@
+
 import streamlit as st
-from vaga_utils import criar_vaga, listar_vagas
-from vaga_model import Base
-from database import engine
-from datetime import date
+import pandas as pd
+from io import BytesIO
 
-# Cria as tabelas
-Base.metadata.create_all(bind=engine)
+st.set_page_config(page_title="Select+", layout="wide")
 
-st.set_page_config(page_title="Sistema de R&S", layout="wide")
-st.title("Sistema de Recrutamento e Seleção")
+# Simulação de dados de vagas
+dados = pd.DataFrame([
+    {"vaga": "Analista RH", "status": "Em andamento", "marca": "O Boticário", "recrutador": "Ana"},
+    {"vaga": "Vendedor", "status": "Finalizada", "marca": "Eudora", "recrutador": "Carlos"},
+    {"vaga": "Financeiro", "status": "Cancelada", "marca": "Levi's", "recrutador": "Ana"},
+    {"vaga": "Estágio", "status": "Congelada", "marca": "Hering", "recrutador": "João"},
+])
 
-menu = st.sidebar.selectbox("Menu", ["Cadastrar Vaga", "Visualizar Vagas"])
+st.title("📋 Sistema Select+")
+st.markdown("**Exportar relatórios de vagas**")
 
-if menu == "Cadastrar Vaga":
-    st.subheader("Cadastrar nova vaga")
-    with st.form("form_vaga"):
-        data_abertura = st.date_input("Data de Abertura", value=date.today())
-        sla = st.number_input("SLA (dias)", min_value=1)
-        marca = st.selectbox("Marca", ["O Boticário", "Quem Disse, Berenice?", "Eudora", "Hering", "Levi's", "Escritório"])
-        departamento = st.text_input("Departamento")
-        solicitante = st.text_input("Solicitante")
-        cargo = st.text_input("Cargo")
-        sigilosa = st.checkbox("Vaga Sigilosa?")
-        tipo_vaga = st.selectbox("Tipo de Vaga", ["Operacional", "Estratégica"])
-        recrutador = st.text_input("Recrutador Responsável")
-        status = st.selectbox("Status da Vaga", ["Aberta", "Fechada", "Congelada", "Cancelada"])
-        etapa = st.text_input("Etapa Atual")
-        fonte = st.text_input("Fonte da Vaga")
-        observacoes = st.text_area("Histórico / Observações")
+filtro_status = st.selectbox("Filtrar por status da vaga", options=["Todas", "Em andamento", "Finalizada", "Cancelada", "Congelada"])
+filtro_recrutador = st.selectbox("Filtrar por recrutador", options=["Todos"] + list(dados["recrutador"].unique()))
 
-        submitted = st.form_submit_button("Salvar")
-        if submitted:
-            dados = {
-                "data_abertura": data_abertura,
-                "sla": sla,
-                "marca": marca,
-                "departamento": departamento,
-                "solicitante": solicitante,
-                "cargo": cargo,
-                "sigilosa": sigilosa,
-                "tipo_vaga": tipo_vaga,
-                "recrutador": recrutador,
-                "status": status,
-                "etapa": etapa,
-                "fonte": fonte,
-                "observacoes": observacoes
-            }
-            criar_vaga(dados)
-            st.success("Vaga cadastrada com sucesso!")
+df_filtrado = dados.copy()
+if filtro_status != "Todas":
+    df_filtrado = df_filtrado[df_filtrado["status"] == filtro_status]
+if filtro_recrutador != "Todos":
+    df_filtrado = df_filtrado[df_filtrado["recrutador"] == filtro_recrutador]
 
-elif menu == "Visualizar Vagas":
-    st.subheader("Lista de Vagas")
-    vagas = listar_vagas()
-    for vaga in vagas:
-        st.markdown(f"""
-        **ID:** {vaga.id}  
-        **Cargo:** {vaga.cargo}  
-        **Marca:** {vaga.marca}  
-        **Status:** {vaga.status}  
-        **Recrutador:** {vaga.recrutador}  
-        **Observações:** {vaga.observacoes}  
-        ---
-        """)
+st.dataframe(df_filtrado, use_container_width=True)
+
+def gerar_excel(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="Vagas")
+    processed_data = output.getvalue()
+    return processed_data
+
+excel_data = gerar_excel(df_filtrado)
+st.download_button(label="📥 Baixar Excel", data=excel_data, file_name="relatorio_vagas.xlsx", mime="application/vnd.ms-excel")
